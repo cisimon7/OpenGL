@@ -16,6 +16,10 @@
 #include <sstream>
 
 
+#define ASSERT(x) if (!(x)) __builtin_debugtrap()
+#define GLCall(x) GLClearError(); x; ASSERT(GLLogCall(#x, __FILE_NAME__, __LINE__))
+
+
 void error_callback(int error, const char *description) {
     fprintf(stderr, "Error: %s\n", description);
 }
@@ -41,9 +45,9 @@ Vertex vertices[] = {
         {-0.5f, -0.5f, 0.f, 0.f, 1.f},
 };
 
-unsigned int indices[] {
-    0, 1, 2,
-    0, 1, 3
+unsigned int indices[]{
+        0, 1, 2,
+        0, 1, 3
 };
 
 struct ShaderProgramSource {
@@ -124,6 +128,18 @@ static unsigned int create_shader(const std::string &vertex_text, const std::str
     glDeleteShader(fragment_shader);
 
     return program;
+}
+
+static void GLClearError() {
+    while (glGetError() != GL_NO_ERROR);
+}
+
+static bool GLLogCall(const char *function, const char *file, int line) {
+    while (GLenum error = glGetError()) {
+        std::cout << "[OpenGL error:]" << "(" << error << "): " << function << " " << file << ": " << line << std::endl;
+        return false;
+    }
+    return true;
 }
 
 int main() {
@@ -217,7 +233,8 @@ int main() {
         mat4x4_mul(mvp, p, m); /* Final Matrix after rotation and projection */
         glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat *) mvp);
         // glDrawArrays(GL_TRIANGLES, 0, 6);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+
+        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_INT, nullptr));
 
         /* Swapping of buffers after each frame has been rendered */
         glfwSwapBuffers(window);

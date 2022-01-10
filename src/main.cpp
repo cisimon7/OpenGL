@@ -1,5 +1,6 @@
 #define GLAD_GL_IMPLEMENTATION
 #define GLFW_INCLUDE_NONE
+
 #include "GLFW/glfw3.h"
 
 #include "linmath.h"
@@ -11,6 +12,8 @@
 #include "Renderer.h"
 #include "VertexBuffer.h"
 #include "IndexBuffer.h"
+#include "VertexArray.h"
+#include "VertexBufferLayout.h"
 
 
 void error_callback(int error, const char *description) {
@@ -122,7 +125,7 @@ static unsigned int create_shader(const std::string &vertex_text, const std::str
 
 int main() {
     GLFWwindow *window;
-    unsigned int program, vertex_array;
+    unsigned int program;
     GLuint mvp_location, vpos_location, vcol_location;
 
     /* Setting callback for error */
@@ -161,11 +164,6 @@ int main() {
             [](GLFWwindow *window) { fprintf(stderr, "Closing Window"); }
     );
 
-    GLCall(glGenVertexArrays(1, &vertex_array));
-    GLCall(glBindVertexArray(vertex_array));
-
-    VertexBuffer vertexBuffer(vertices, 4 * sizeof(Vertex));
-
     const auto[vertex_shader_text, fragment_shader_text] =
     parseShader("res/shaders/Basic.shader");
     program = create_shader(vertex_shader_text, fragment_shader_text);
@@ -174,10 +172,13 @@ int main() {
     vpos_location = glGetAttribLocation(program, "vPos");
     vcol_location = glGetAttribLocation(program, "vCol");
 
-    GLCall(glEnableVertexAttribArray(vpos_location));
-    GLCall(glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), nullptr));
-    GLCall(glEnableVertexAttribArray(vcol_location));
-    GLCall(glVertexAttribPointer(vcol_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), (void *) (sizeof(float) * 2)));
+
+    VertexArray vertexArray;
+    VertexBuffer vertexBuffer(vertices, 4 * sizeof(Vertex));
+    VertexBufferLayout layout;
+    layout.Push<float>(2, vpos_location);
+    layout.Push<float>(3, vcol_location);
+    vertexArray.addBuffer(vertexBuffer, layout);
 
     IndexBuffer indexBuffer(indices, 6);
 
@@ -186,8 +187,7 @@ int main() {
     /* glfwGetTime() returns time since initialization */
     auto current_time = []() { return glfwGetTime(); };
 
-
-    GLCall(glBindVertexArray(0));
+    vertexArray.unBind();
     GLCall(glUseProgram(0));
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
@@ -221,8 +221,9 @@ int main() {
 
         // glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_size);
 
-        GLCall(glBindVertexArray(vertex_array));
+        // GLCall(glBindVertexArray(vertex_array));
         // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_count);
+        vertexArray.bind();
         indexBuffer.bind();
 
         // glDrawArrays(GL_TRIANGLES, 0, 6);

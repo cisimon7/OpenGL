@@ -1,4 +1,3 @@
-#include <iostream>
 #include "IndexBuffer.h"
 #include "Renderer.h"
 

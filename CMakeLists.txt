@@ -10,7 +10,7 @@ set(GLFW_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
 
 add_subdirectory(${GLFW_DIR})
 
-add_executable(OpenGL main.cpp ${GLFW_DIR}/deps/glad/gles2.h)
+add_executable(OpenGL src/main.cpp src/Renderer.cpp src/Renderer.h src/VertexBuffer.cpp src/VertexBuffer.h src/IndexBuffer.cpp src/IndexBuffer.h)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_DIR}/include ${GLFW_DIR}/deps)
 target_link_directories(${PROJECT_NAME} PRIVATE ${GLFW_DIR}/src)

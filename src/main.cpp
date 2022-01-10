@@ -1,23 +1,16 @@
 #define GLAD_GL_IMPLEMENTATION
-
-#include "glad/gl.h"
-
 #define GLFW_INCLUDE_NONE
-
-#include <GLFW/glfw3.h>
+#include "GLFW/glfw3.h"
 
 #include "linmath.h"
 
-#include <cstdlib>
-#include <cstdio>
-#include <string>
+#include <sstream>
 #include <iostream>
 #include <fstream>
-#include <sstream>
 
-
-#define ASSERT(x) if (!(x)) __builtin_debugtrap()
-#define GLCall(x) GLClearError(); x; ASSERT(GLLogCall(#x, __FILE_NAME__, __LINE__))
+#include "Renderer.h"
+#include "VertexBuffer.h"
+#include "IndexBuffer.h"
 
 
 void error_callback(int error, const char *description) {
@@ -39,9 +32,6 @@ Vertex vertices[] = {
         {-0.5f, +0.5f, 1.f, 0.f, 0.f},
         {+0.5f, -0.5f, 0.f, 1.f, 0.f},
         {+0.5f, +0.5f, 0.f, 0.f, 1.f},
-
-        // {+0.5f, -0.5f, 1.f, 1.f, 0.f},
-        // {-0.5f, +0.5f, 0.f, 1.f, 1.f},
         {-0.5f, -0.5f, 0.f, 0.f, 1.f},
 };
 
@@ -130,22 +120,9 @@ static unsigned int create_shader(const std::string &vertex_text, const std::str
     return program;
 }
 
-static void GLClearError() {
-    while (glGetError() != GL_NO_ERROR);
-}
-
-static bool GLLogCall(const char *function, const char *file, int line) {
-    while (GLenum error = glGetError()) {
-        std::cout << "[OpenGL error:]" << "(" << error << "): " << function << " " << file << ": " << line << std::endl;
-        return false;
-    }
-    return true;
-}
-
 int main() {
     GLFWwindow *window;
-    unsigned int vertex_buffer, program, index_buffer;
-    unsigned int vertex_shader, fragment_shader;
+    unsigned int program, vertex_array;
     GLuint mvp_location, vpos_location, vcol_location;
 
     /* Setting callback for error */
@@ -155,8 +132,9 @@ int main() {
     if (!glfwInit())
         exit(EXIT_FAILURE);
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     window = glfwCreateWindow(640, 480, "Simple Example", nullptr, nullptr);
     if (!window) {
@@ -168,6 +146,8 @@ int main() {
      * OpenGL context needed to be able to use OpenGL API
      * Context will remain current till another context is made or window owning the current context is destroyed */
     glfwMakeContextCurrent(window);
+
+    glfwSwapInterval(1);
 
     /* Setting what key (Esc) closes the window */
     glfwSetKeyCallback(window, key_callback);
@@ -181,35 +161,36 @@ int main() {
             [](GLFWwindow *window) { fprintf(stderr, "Closing Window"); }
     );
 
-    glGenBuffers(1, &vertex_buffer); /* Create for me a buffer */
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer); /* Set buffer type */
-    glBufferData(GL_ARRAY_BUFFER, 6 * sizeof(Vertex), vertices,
-                 GL_STATIC_DRAW); /* Creates and initializes a buffer object's data store */
+    GLCall(glGenVertexArrays(1, &vertex_array));
+    GLCall(glBindVertexArray(vertex_array));
+
+    VertexBuffer vertexBuffer(vertices, 4 * sizeof(Vertex));
 
     const auto[vertex_shader_text, fragment_shader_text] =
     parseShader("res/shaders/Basic.shader");
     program = create_shader(vertex_shader_text, fragment_shader_text);
 
-    mvp_location = glGetUniformLocation(program, "MVP");
+    mvp_location = glGetUniformLocation(program, "u_MVP");
     vpos_location = glGetAttribLocation(program, "vPos");
     vcol_location = glGetAttribLocation(program, "vCol");
 
-    glEnableVertexAttribArray(vpos_location);
-    glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), nullptr);
-    glEnableVertexAttribArray(vcol_location);
-    glVertexAttribPointer(vcol_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), (void *) (sizeof(float) * 2));
+    GLCall(glEnableVertexAttribArray(vpos_location));
+    GLCall(glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), nullptr));
+    GLCall(glEnableVertexAttribArray(vcol_location));
+    GLCall(glVertexAttribPointer(vcol_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), (void *) (sizeof(float) * 2)));
 
+    IndexBuffer indexBuffer(indices, 6);
 
-    glGenBuffers(1, &index_buffer); /* Create for me a buffer */
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer); /* Set buffer type */
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(unsigned int), indices,
-                 GL_STATIC_DRAW); /* Creates and initializes a buffer object's data store */
-
-
-    glUseProgram(program);
+    GLCall(glUseProgram(program));
 
     /* glfwGetTime() returns time since initialization */
     auto current_time = []() { return glfwGetTime(); };
+
+
+    GLCall(glBindVertexArray(0));
+    GLCall(glUseProgram(0));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
 
     /* Checking the window close flag */
     while (!glfwWindowShouldClose(window)) {
@@ -231,19 +212,29 @@ int main() {
         mat4x4_rotate_Z(m, m, (float) current_time()); /* Rotating matrix by angle of time */
         mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f); /* Project in orthogonal view */
         mat4x4_mul(mvp, p, m); /* Final Matrix after rotation and projection */
-        glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat *) mvp);
-        // glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_INT, nullptr));
+        GLCall(glUseProgram(program));
+
+        /* Uniforms are used to send data to shaders from cpu
+         * Uniforms are set per draw where attributes are set per vertex  */
+        glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat *) mvp);
+
+        // glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_size);
+
+        GLCall(glBindVertexArray(vertex_array));
+        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_count);
+        indexBuffer.bind();
+
+        // glDrawArrays(GL_TRIANGLES, 0, 6);
+        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr));
 
         /* Swapping of buffers after each frame has been rendered */
         glfwSwapBuffers(window);
-        // glfwSwapInterval(1);
         glfwPollEvents();
     }
 
     /* When a window is no longer needed, destroy it */
-    glfwDestroyWindow(window);
+    GLCall(glfwDestroyWindow(window));
 
     /* Terminate the Library */
     glfwTerminate();

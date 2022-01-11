@@ -3,17 +3,12 @@
 
 #include "GLFW/glfw3.h"
 
-#include "linmath.h"
-
-#include <sstream>
-#include <iostream>
-#include <fstream>
-
 #include "Renderer.h"
 #include "VertexBuffer.h"
 #include "IndexBuffer.h"
 #include "VertexArray.h"
 #include "VertexBufferLayout.h"
+#include "Shader.h"
 
 
 void error_callback(int error, const char *description) {
@@ -43,90 +38,9 @@ unsigned int indices[]{
         0, 1, 3
 };
 
-struct ShaderProgramSource {
-    std::string VertexSource;
-    std::string FragmentSource;
-};
-
-static ShaderProgramSource parseShader(const std::string &filePath) {
-    std::ifstream stream(filePath);
-    std::stringstream shaders[2];
-
-    enum class ShaderType {
-        NONE = -1, VERTEX = 0, FRAGMENT = 1
-    };
-
-    std::string line;
-    ShaderType type = ShaderType::NONE;
-    while (getline(stream, line)) {
-
-        if (line.find("#shader") != std::string::npos) {
-            if (line.find("vertex") != std::string::npos)
-                type = ShaderType::VERTEX;
-            else if (line.find("fragment") != std::string::npos)
-                type = ShaderType::FRAGMENT;
-        } else {
-            shaders[(int) type] << line << "\n";
-        }
-    }
-
-    return {shaders[(int) ShaderType::VERTEX].str(), shaders[(int) ShaderType::FRAGMENT].str()};
-}
-
-
-static unsigned int compile_shader(unsigned int type, const char *source) {
-
-    unsigned int shader;
-
-    shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    int result;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    if (result == GL_FALSE) {
-        int length;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-        char *message = (char *) alloca(length * sizeof(char));
-        glGetShaderInfoLog(shader, length, &length, message);
-
-        std::cout << "Failed to compile: "
-                  << (type == GL_VERTEX_SHADER ? "Vertex" : "Fragment") << " Shader"
-                  << std::endl;
-        std::cout << message << std::endl;
-
-        glDeleteShader(shader);
-        return 0;
-    }
-
-    return shader;
-}
-
-static unsigned int create_shader(const std::string &vertex_text, const std::string &fragment_text) {
-
-    unsigned int vertex_shader, fragment_shader, program;
-
-    const char *vText = vertex_text.c_str();
-    const char *fText = fragment_text.c_str();
-    vertex_shader = compile_shader(GL_VERTEX_SHADER, vText);
-    fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fText);
-
-    program = glCreateProgram();
-    glAttachShader(program, vertex_shader);
-    glAttachShader(program, fragment_shader);
-    glLinkProgram(program);
-    glValidateProgram(program);
-
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-
-    return program;
-}
-
 int main() {
     GLFWwindow *window;
-    unsigned int program;
-    GLuint mvp_location, vpos_location, vcol_location;
+    int mvpLocation, vPosLocation, vColLocation;
 
     /* Setting callback for error */
     glfwSetErrorCallback(error_callback);
@@ -164,33 +78,29 @@ int main() {
             [](GLFWwindow *window) { fprintf(stderr, "Closing Window"); }
     );
 
-    const auto[vertex_shader_text, fragment_shader_text] =
-    parseShader("res/shaders/Basic.shader");
-    program = create_shader(vertex_shader_text, fragment_shader_text);
-
-    mvp_location = glGetUniformLocation(program, "u_MVP");
-    vpos_location = glGetAttribLocation(program, "vPos");
-    vcol_location = glGetAttribLocation(program, "vCol");
+    Shader shader("res/shaders/Basic.shader");
+    shader.bind();
+    mvpLocation = shader.getUniformLocation("u_MVP");
+    vPosLocation = shader.getAttributeLocation("vPos");
+    vColLocation = shader.getAttributeLocation("vCol");
 
 
     VertexArray vertexArray;
     VertexBuffer vertexBuffer(vertices, 4 * sizeof(Vertex));
     VertexBufferLayout layout;
-    layout.Push<float>(2, vpos_location);
-    layout.Push<float>(3, vcol_location);
+    layout.Push<float>(2, vPosLocation);
+    layout.Push<float>(3, vColLocation);
     vertexArray.addBuffer(vertexBuffer, layout);
 
     IndexBuffer indexBuffer(indices, 6);
-
-    GLCall(glUseProgram(program));
 
     /* glfwGetTime() returns time since initialization */
     auto current_time = []() { return glfwGetTime(); };
 
     vertexArray.unBind();
-    GLCall(glUseProgram(0));
-    GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
-    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
+    shader.unBind();
+    vertexBuffer.unBind();
+    indexBuffer.unBind();
 
     /* Checking the window close flag */
     while (!glfwWindowShouldClose(window)) {
@@ -213,16 +123,12 @@ int main() {
         mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f); /* Project in orthogonal view */
         mat4x4_mul(mvp, p, m); /* Final Matrix after rotation and projection */
 
-        GLCall(glUseProgram(program));
+        shader.bind();
 
         /* Uniforms are used to send data to shaders from cpu
          * Uniforms are set per draw where attributes are set per vertex  */
-        glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat *) mvp);
+        shader.setUniformMat4x4(mvpLocation, mvp);
 
-        // glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_size);
-
-        // GLCall(glBindVertexArray(vertex_array));
-        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_count);
         vertexArray.bind();
         indexBuffer.bind();
 

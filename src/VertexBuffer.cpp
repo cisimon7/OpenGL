@@ -1,3 +1,4 @@
+#include "VertexBufferLayout.h"
 #include "VertexBuffer.h"
 #include "Renderer.h"
 

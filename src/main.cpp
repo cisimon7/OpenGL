@@ -4,10 +4,11 @@
 #include "GLFW/glfw3.h"
 
 #include "Renderer.h"
+
 #include "VertexBuffer.h"
+#include "VertexBufferLayout.h"
 #include "IndexBuffer.h"
 #include "VertexArray.h"
-#include "VertexBufferLayout.h"
 #include "Shader.h"
 
 
@@ -102,21 +103,24 @@ int main() {
     vertexBuffer.unBind();
     indexBuffer.unBind();
 
+    Renderer renderer;
+
+    float ratio;
+    int width, height;
+    mat4x4 m, p, mvp;
+
+    mat4x4 eye;
+    mat4x4_identity(eye);
+
+    /* Get maximum image size that can be displayed and save as width and height*/
+    glfwGetFramebufferSize(window, &width, &height);
+    ratio = width / (float) height;
+
     /* Checking the window close flag */
     while (!glfwWindowShouldClose(window)) {
-        float ratio;
-        int width, height;
-        mat4x4 m, p, mvp;
-
-        mat4x4 eye;
-        mat4x4_identity(eye);
-
-        /* Get maximum image size that can be displayed and save as width and height*/
-        glfwGetFramebufferSize(window, &width, &height);
-        ratio = width / (float) height;
 
         glViewport(0, 0, width, height);  /* Create buffer of certain size */
-        glClear(GL_COLOR_BUFFER_BIT); /* Clear buffer */
+        renderer.clear();
 
         mat4x4_identity(m); /* Initialization to identity matrix */
         mat4x4_rotate_Z(m, m, (float) current_time()); /* Rotating matrix by angle of time */
@@ -129,11 +133,7 @@ int main() {
          * Uniforms are set per draw where attributes are set per vertex  */
         shader.setUniformMat4x4(mvpLocation, mvp);
 
-        vertexArray.bind();
-        indexBuffer.bind();
-
-        // glDrawArrays(GL_TRIANGLES, 0, 6);
-        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr));
+        renderer.draw(vertexArray, indexBuffer, shader);
 
         /* Swapping of buffers after each frame has been rendered */
         glfwSwapBuffers(window);

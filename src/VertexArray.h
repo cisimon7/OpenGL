@@ -1,8 +1,9 @@
 #ifndef OPENGL_VERTEXARRAY_H
 #define OPENGL_VERTEXARRAY_H
 
-#include "VertexBufferLayout.h"
 #include "VertexBuffer.h"
+
+class VertexBufferLayout;
 
 class VertexArray {
 private:
